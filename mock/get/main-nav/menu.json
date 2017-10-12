@@ -1,0 +1,19 @@
+{
+  "code": "SUCCESS",
+  "message": "请求成功",
+  "result": [
+    {
+      "id": 33,
+      "name": "测试",
+      "icon": "ios-paper",
+      "menus": [
+        {
+          "id": 82,
+          "title": "百度",
+          "icon": "ios-paper",
+          "pageUrl": "http://www.baidu.com"
+        }
+      ]
+    }
+  ]
+}
