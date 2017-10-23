@@ -1,0 +1,17 @@
+[
+    {
+      "name": "测试",
+      "icon": "ios-paper",
+      "menus": [
+        {
+          "title": "百度",
+          "icon": "https://cdn0.iconfinder.com/data/icons/job-seeker/256/checklist_job_seeker_employee_unemployee_work-128.png",
+          "target": {
+              "type": "LINK",
+              "url": "http://192.168.1.124:81",
+              "replace": false
+          }
+        }
+      ]
+    }
+  ]

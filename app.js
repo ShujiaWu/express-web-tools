@@ -12,8 +12,10 @@ let debug = require('debug')('express-node-start:app.js')
 
 let index = require('./routes/index')
 let users = require('./routes/users')
+let menu = require('./routes/menu/index')
+let pageNavigator = require('./routes/page-navigator/index')
 
-let monitor = require('./routes/monitor')
+let monitor = require('./routes/monitor/index')
 let mock = require('./routes/mock')
 
 let app = express()
@@ -85,6 +87,7 @@ case 'production':
  * 中间件
  */
 // json
+app.use(bodyParser.text())
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: false }))
 // cookie
@@ -172,8 +175,10 @@ app.use(function (req, res, next) {
 // 路由配置
 app.use('/', index)
 app.use('/users', users)
-app.use('/monitor', monitor)
+app.use('/api/monitor/v1', monitor)
 app.use('/mock', mock)
+app.use('/api/menus', menu)
+app.use('/api/page-navigator', pageNavigator)
 
 /**
  * 错误处理
