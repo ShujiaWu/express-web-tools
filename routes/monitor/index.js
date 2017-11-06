@@ -2,9 +2,11 @@ let express = require('express')
 let datetime = require('../../utils/datetime')
 let router = express.Router()
 let mysql = require('../../config/mysql')
-let response = require('../../config/response')
+let Response = require('../../config/Response')
 let io = require('socket.io')(11080)
 const PageConfig = require('../../config/page')
+let redis = require('../../config/redis')
+let debug = require('debug')('express-web-tools:monitor')
 
 let monitor = io.of('/monitor')
 
@@ -28,18 +30,56 @@ let monitor = io.of('/monitor')
 // })
 // 查找数据库中的ClientID
 let clientIDs = {}
-mysql.query('select distinct appID, clientID from console_msg', null, (err, results, fields) => {
-  if (err) {
-    console.log(err)
-    return
-  }
-  results.forEach(element => {
-    if (!clientIDs[element.appID]) {
-      clientIDs[element.appID] = []
-    }
-    clientIDs[element.appID].push(element.clientID)
-  }, this)
+
+Promise.all([
+  // 删除 App ID
+  new Promise((resolve, reject) => {
+    redis.del('MonitorAppID', (err) => {
+      if (err) {
+        reject(err)
+      }
+      debug(`清理APP ID数据成功`)
+      resolve(true)
+    })
+  }),
+  // 删除所有的 Client ID
+  new Promise((resolve, reject) => {
+    redis.keys('MonitorClientID:*', (err, result) => {
+      if (err) {
+        reject(err)
+      }
+      if (result.length === 0) {
+        debug('暂无Client ID数据')
+        resolve(true)
+      }
+      redis.del(result, (err, result) => {
+        if (err) {
+          reject(err)
+          return
+        }
+        debug(`清理Client ID数据成功`)
+        resolve(true)
+      })
+    })
+  })
+]).then(results => {
+  return new Promise((resolve, reject) => {
+    mysql.query('select distinct appID, clientID from console_msg', null, (err, results, fields) => {
+      if (err) {
+        reject(err)
+      }
+      results.forEach(element => {
+        redis.sadd('MonitorAppID', element.appID)
+        redis.sadd(`MonitorClientID:${element.appID}`, element.clientID)
+      }, this)
+      resolve(true)
+    })
+  })
+}).catch (e => {
+  debug(e)
 })
+
+
 //#endregion
 //================================================================
 
@@ -87,7 +127,7 @@ router.post('/', function (req, res) {
       res.sendStatus(400, err)
     } else {
       console.log('插入数据成功')
-      res.json(response.success())
+      res.json(Response.success())
     }
   })
   // 信息推送
@@ -120,51 +160,111 @@ router.post('/', function (req, res) {
   //   appIDs.push(data.appID)
   //   monitor.emit('new-app', data.appID)
   // }
+  redis.sadd('MonitorAppID', [data.appID], (err, result) => {
+    if (err) {
+      debug('【redis】存储APP ID失败')
+    } else {
+      if (result === 0) {
+        // 已经存在在集合中
+      } else {
+        // 不存在在集合中， 推送到客户端
+        monitor.emit('new-app', data.appID)
+      }
+      debug(`【redis】存储APP ID成功${result}`)
+    }
+  })
+  redis.sadd(`MonitorClientID:${data.appID}`, [data.clientID], (err, result) => {
+    if (err) {
+      debug('【redis】存储Client ID失败')
+    } else {
+      if (result === 0) {
+        // 已经存在在集合中
+      } else {
+        // 不存在在集合中， 推送到客户端
+        // 推送新的Client ID加入
+        monitor.emit('new-client', {
+          appID: data.appID,
+          clientID: data.clientID
+        })
+      }
+      debug(`【redis】存储Client ID成功${result}`)
+    }
+  })
 
   // 推送
-  if (!clientIDs[data.appID]) {
-    clientIDs[data.appID] = []
-    // 推送新的 APP ID 加入
-    monitor.emit('new-app', data.appID)
-    clientIDs[data.appID].push(data.clientID)
-    // 推送新的Client ID加入
-    monitor.emit('new-client', {
-      appID: data.appID,
-      clientID: data.clientID
-    })
-  } else {
-    if (clientIDs[data.appID].indexOf(data.clientID) === -1) {
-      // 推送新的Client ID加入
-      clientIDs[data.appID].push(data.clientID)
-      monitor.emit('new-client', {
-        appID: data.appID,
-        clientID: data.clientID
-      })
-    }
-  }
+  // if (!clientIDs[data.appID]) {
+  //   clientIDs[data.appID] = []
+  //   // 推送新的 APP ID 加入
+  //   monitor.emit('new-app', data.appID)
+  //   clientIDs[data.appID].push(data.clientID)
+  //   // 推送新的Client ID加入
+  //   monitor.emit('new-client', {
+  //     appID: data.appID,
+  //     clientID: data.clientID
+  //   })
+  // } else {
+  //   if (clientIDs[data.appID].indexOf(data.clientID) === -1) {
+  //     // 推送新的Client ID加入
+  //     clientIDs[data.appID].push(data.clientID)
+  //     monitor.emit('new-client', {
+  //       appID: data.appID,
+  //       clientID: data.clientID
+  //     })
+  //   }
+  // }
 })
 
 /**
  * 获取所有的 App ID
  */
-router.get('/appid', function (req, res) {
-  let result = []
-  for (var key in clientIDs) {
-    if (clientIDs.hasOwnProperty(key)) {
-      result.push(key)
+router.get('/appid', function (req, res, next) {
+  redis.smembers('MonitorAppID', (err, result) => {
+    if (err) {
+      next(err)
+      return
     }
-  }
-  res.json(response.success(result))
+    res.json(Response.success({
+      result
+    }))
+  })
+  // let result = []
+  // for (var key in clientIDs) {
+  //   if (clientIDs.hasOwnProperty(key)) {
+  //     result.push(key)
+  //   }
+  // }
+  // res.json(Response.success({result}))
 })
 
 /**
  * 获取所有的 Client ID
  */
-router.get('/client-id', function (req, res) {
-  res.json(response.success(clientIDs))
+router.get('/client-id', function (req, res, next) {
+  let data = {}
+  redis.smembers('MonitorAppID', (err, result) => {
+    if (err) {
+      next(err)
+      return
+    }
+    let multi = redis.multi()
+    result.forEach((element) => {
+      multi = multi.smembers(`MonitorClientID:${element}`, (err, result) => {
+        data[element] = result
+      })
+    }, this)
+    multi.exec((err, results) => {
+      if (err) {
+        next(err)
+        return
+      }
+      res.json(Response.success({result: data}))
+    })
+  })
+
 })
 
-router.get('/message', function(req, res) {
+// 获取信息
+router.get('/message', function(req, res, next) {
   let options = []
 
   let level = '1 = 1'
@@ -190,7 +290,6 @@ router.get('/message', function(req, res) {
   let offet = size * (current - 1)
   options.push(offet)
   options.push(size)
-  console.log(options)
 
   Promise.all([
     new Promise ((resolve,reject) => {
@@ -210,19 +309,24 @@ router.get('/message', function(req, res) {
       })
     })
   ]).then(result => {
-    res.json(response.success({
-      page: {
-        size: size,
-        total: result[0],
-        current: current
-      },
-      list: result[1]
+    res.json(Response.success({
+      result: {
+        page: {
+          size: size,
+          total: result[0],
+          current: current
+        },
+        list: result[1]
+      }
     }))
+  }).catch(e => {
+    next(e)
   })
 })
 
 router.get('/test', function(req, res) {
   console.log(monitor.rooms)
-  res.json(response.success())
+  res.json(Response.success())
 })
+
 module.exports = router

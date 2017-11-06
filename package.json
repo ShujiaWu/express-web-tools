@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "scripts": {
     "start": "node ./bin/www",
-    "debug": "set DEBUG=file-watcher:* & node ./bin/www",
+    "debug": "set DEBUG=express-web-tools:* & node ./bin/www",
     "cluster": "node ./bin/cluster",
-    "cluster-debug": "set DEBUG=file-watcher:* & node ./bin/cluster",
+    "cluster-debug": "set DEBUG=express-web-tools:* & node ./bin/cluster",
     "supervisor": "supervisor ./bin/www",
-    "supervisor-debug": "set DEBUG=file-watcher:* & supervisor ./bin/www",
+    "supervisor-debug": "set DEBUG=express-web-tools:* & supervisor ./bin/www",
     "hotcode": "hotcode ./bin/www"
   },
   "dependencies": {

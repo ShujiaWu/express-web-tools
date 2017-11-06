@@ -8,16 +8,11 @@ let bodyParser = require('body-parser')
 let credentials = require('./credentials')
 let compression = require('compression')
 
-let debug = require('debug')('express-node-start:app.js')
+let debug = require('debug')('express-web-tools:app.js')
 
-let index = require('./routes/index')
-let users = require('./routes/users')
-let menu = require('./routes/menu/index')
-let pageNavigator = require('./routes/page-navigator/index')
-
-let monitor = require('./routes/monitor/index')
-let mock = require('./routes/mock')
-
+// ==========================================================
+let routes = require('./routes/index')
+// ==========================================================
 let app = express()
 // app.set('env','production');
 
@@ -168,39 +163,7 @@ app.use(function (req, res, next) {
   domain.run(next)
 })
 
-
-/**
- * 路由配置
- */
 // 路由配置
-app.use('/', index)
-app.use('/users', users)
-app.use('/api/monitor/v1', monitor)
-app.use('/mock', mock)
-app.use('/api/menus', menu)
-app.use('/api/page-navigator', pageNavigator)
-
-/**
- * 错误处理
- */
-app.use(function (req, res, next) {
-  // 404处理，并交由错误处理
-  let err = new Error('Not Found')
-  err.status = 404
-  next(err)
-})
-app.use(function (err, req, res) {
-  // app.locals属性来存储本地变量
-  // 设置locals, 只在开发环境下听过错误信息
-  res.locals.message = err.message
-  res.locals.error = req.app.get('env') === 'development' ? err : {}
-
-  // 向浏览器发送错误页面
-  // res.type('text/html');   //设置返回数据的类型，默认是text/html
-  res.status(err.status || 500)  //设置状态码
-  res.render('error', {
-    layout: 'layout' //指定了模板，默认可以不指定
-  })
-})
+app.use(routes)
 
 module.exports = app 

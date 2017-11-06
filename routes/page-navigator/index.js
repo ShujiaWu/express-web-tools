@@ -1,8 +1,7 @@
 var express = require('express')
 var router = express.Router()
-// const Menu = require('./schema/menu')
-// let initData = require('./data/init')
 let mysql = require('../../config/mysql')
+let Response = require('../../config/response')
 
 const PageConfig = {
   size: 10,
@@ -11,7 +10,9 @@ const PageConfig = {
 router.get('/', function (req, res, next) {
   mysql.query('select * from page_navigator where is_deleted = 0 and enabled = 1', null, (err, results, fields) => {
     if (err) {
-      next(err)
+      res.status(400).json(Response.error({
+        result: err
+      }))
       return
     }
     let data = []
@@ -39,11 +40,11 @@ router.get('/', function (req, res, next) {
         }
       }, this)
     }
-    res.json({
+    res.json(Response.success({
       code: 'SUCCESS',
       message: '获取数据成功',
       result: data
-    })
+    }))
   })
 })
 

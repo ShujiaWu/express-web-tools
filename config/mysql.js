@@ -1,7 +1,8 @@
 let mysql = require('mysql')
+let debug = require('debug')('express-web-tools:mysql')
 
 let pool = mysql.createPool({
-  host: '192.168.204.130',
+  host: '192.168.36.10',
   // host: 'localhost',
   user: 'root',
   password: 'root',
@@ -10,11 +11,11 @@ let pool = mysql.createPool({
 })
 
 pool.on('enqueue', function () {
-  console.log('Waiting for available connection slot');
+  debug('Waiting for available connection slot');
 })
 
 pool.on('release', function (connection) {
-  console.log('Connection %d released', connection.threadId);
+  debug('Connection %d released', connection.threadId);
 })
 
 module.exports = {

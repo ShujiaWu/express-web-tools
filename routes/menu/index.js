@@ -1,61 +1,11 @@
 var express = require('express')
 var router = express.Router()
-// const Menu = require('./schema/menu')
-// let initData = require('./data/init')
 let mysql = require('../../config/mysql')
+const Response = require('../../config/response')
+let redis = require('../../config/redis')
+let debug = require('debug')('express-web-tools:menu')
 
-const PageConfig = {
-  size: 10,
-  now: 1
-}
-
-// router.all('/', function(req, res, next) {
-//   res.header("Access-Control-Allow-Origin", "*");
-//   res.header('Access-Control-Allow-Methods', 'PUT, GET, POST, DELETE, OPTIONS');
-//   res.header("Access-Control-Allow-Headers", "X-Requested-With");
-//   res.header('Access-Control-Allow-Headers', 'Content-Type');
-//   next();
-// });
-
-/**
- * 初始化数据
- */
-// router.post('/init', (req, res) => {
-//   let errorMsg = []
-//   initData.forEach((element) => {
-//     let menu = Menu(element)
-//     menu.save((err, res) => {
-//       if (err) {
-//         // 异常
-//         errorMsg.push(err.message)
-//       } else {
-//         element.menus.forEach((menu) => {
-//           menu.parent = res._id
-//           let subMenu = Menu(menu)
-//           subMenu.save((err) => {
-//             if (err) {
-//               // 异常
-//               errorMsg.push(err.message)
-//             }
-//           })
-//         })
-//       }
-//     })
-//   }, this)
-//   if (errorMsg.length === 0) {
-//     res.json({
-//       code: 'SUCCESS',
-//       message: '初始化数据成功',
-//     })
-//   } else {
-//     res.json({
-//       code: 'Error',
-//       message: errorMsg.join(','),
-//     })
-//   }
-// })
-
-router.get('/', function (req, res, next) {
+function getMenusFromMysql(req, res, next) {
   mysql.query(`
   SELECT
     g.id AS gId,
@@ -79,26 +29,7 @@ router.get('/', function (req, res, next) {
     let data = []
     if (results && results.length) {
       let groups = {}
-      console.log(results)
       results.forEach(element => {
-        // if (!element.parent) {
-        //   // 菜单组
-        //   groups[element.id] = {
-        //     id: element.id,
-        //     icon: element.icon,
-        //     name: element.name,
-        //     menus: []
-        //   }
-        //   data.push(groups[element.id])
-        // } else {
-        //   // 菜单
-        //   groups[element.parent].menus.push({
-        //     id: element.id,
-        //     icon: element.icon,
-        //     name: element.name,
-        //     target: JSON.parse(element.target)
-        //   })
-        // }
         if (!groups[element.gId]) {
           groups[element.gId] = {
             id: element.gId,
@@ -116,101 +47,49 @@ router.get('/', function (req, res, next) {
         })
       }, this)
     }
-    res.json({
+    
+    redis.set('menus', JSON.stringify(data), (err) => {
+      if (err) {
+        debug('Redis写入失败')
+      }
+    })
+
+    res.json(Response.success({
       code: 'SUCCESS',
       message: '获取数据成功',
       result: data
-    })
+    }))
   })
-  // console.log('++++++++')
-  // let data = []
-  // Menu.find({    
-  // }, {
-  //   __v: 0
-  // }).exec((err,res) => {
-  //   if (err) {
-  //     next(err)
-  //   }
-  //   if (res && res.length) {
-  //     let groups = {}
-  //     res.forEach(element => {
-  //       if (!element.parent) {
-  //         // 菜单组
-  //         groups[element._id] = {
-  //           id: element.id,
-  //           icon: element.icon,
-  //           name: element.name,
-  //           menus: []
-  //         }
-  //         data.push(groups[element._id])
-  //       } else {
-  //         // 菜单
-  //         groups[element.parent].menus.push({
-  //           id: element.id,
-  //           icon: element.icon,
-  //           name: element.name,
-  //           target: element.target
-  //         })
-  //       }
-  //     }, this)
-  //     resp.json({
-  //       code: 'SUCCESS',
-  //       message: '获取数据成功',
-  //       result: data
-  //     })
-  //   }
-  // })
+}
 
+router.get('/', function (req, res, next) {
+
+  redis.get('menus', (err, result) => {
+    // Redis获取异常
+    if (err) {
+      debug(`获取redis菜单数据错误${err}`)
+      getMenusFromMysql(req, res, next)
+      return
+    }
+    // Redis没有数据
+    if (!result) {
+      getMenusFromMysql(req, res, next)
+      return
+    }
+    // 尝试获取数据
+    let data = undefined
+    try {
+      data = JSON.parse(result)
+      res.json(Response.success({
+        code: 'SUCCESS',
+        message: '获取数据成功',
+        result: data
+      }))
+    } catch (e) {
+      // 数据异常
+      getMenusFromMysql(req, res, next)
+    }
+  })
 })
-
-// router.get('/group', function (req, resp, next) {
-//   let list = []
-//   let page = {}
-//   Object.assign(page, PageConfig, {
-//     now: parseInt(req.query['pageNow']),
-//     size: parseInt(req.query['pageSize'])
-//   })
-//   Promise.all([
-//     new Promise((resolve) => {
-//       Menu.count((err, res) => {
-//         resolve(res)
-//       })
-//     }),
-//     new Promise((resolve) => {
-//       Menu
-//         .find({
-//           parent: undefined
-//         }, {
-//           __v: 0
-//         })
-//         .skip(page.size * (page.now - 1))
-//         .limit(page.size)
-//         .exec((err, res) => {
-//           if (err) {
-//             next(err)
-//           }
-//           if (res && res.length) {
-//             res.forEach(element => {
-//               list.push({
-//                 id: element.id,
-//                 icon: element.icon,
-//                 name: element.name
-//               })
-//             }, this)
-//             resolve(list)
-//           }
-//         })
-//     })
-//   ]).then(result => {
-//     resp.json({
-//       code: 'SUCCESS',
-//       message: '获取数据成功',
-//       result: {
-//         page: result[0],
-//         list:result[1]
-//       }
-//     })
-//   })
-// })
 
 module.exports = router
